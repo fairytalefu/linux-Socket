@@ -31,10 +31,9 @@ void* socket_1_process(void*)
 	while(mServer_1.Listen())
 	{	
 		mServer_1.Accept(mClient_1);
-		printf("accepted\n");
+		printf("accepted CLinet1.\n");
 		while(mClient_1.m_bConnected)
-		{
-			printf("connected!\n");			
+		{			
 			memset(buf_1, '\0', sizeof(buf_1));
 
 			if(mClient_1.Recv(buf_1, BUFFER_SIZE) > 0)
@@ -71,10 +70,9 @@ void* socket_2_process(void*)
 	while(mServer_2.Listen())
 	{	
 		mServer_2.Accept(mClient_2);
-		printf("accepted\n");
+		printf("accepted Client2\n");
 		while(mClient_2.m_bConnected)
 		{
-			printf("connected!\n");
 			memset(buf_2, '\0', sizeof(buf_2));
 			if(mClient_2.Recv(buf_2, BUFFER_SIZE) > 0)
 			{
