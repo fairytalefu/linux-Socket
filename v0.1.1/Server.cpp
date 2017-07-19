@@ -14,6 +14,44 @@ sem_t photo_sem;
 pthread_t queue_id;
 pthread_t socket_1_id;
 pthread_t socket_2_id;
+pthread_t handle_image_event_id;
+
+void* handle_image_event_process(void *)
+{
+	char msg[256];
+	ServerSock mServer;
+	ClientSock mClient;
+	char message[BUFFER_SIZE];
+	mServer.Create(false);
+	
+	mServer.Bind(SERVER_3_PORT);
+	
+	// 等待客户端连接
+  	printf("handle_image_event_process is waiting for a connection\n");
+	
+	while(mServer.Listen())
+	{
+		mServer.Accept(mClient);
+		printf("Accepted handle image socket.\n");
+		
+		while(mClient.m_bConnected)
+		{
+			
+			if(mClient.Recv(msg,256) <=0 )
+			{
+				mClient.Close();
+				mClient.m_bConnected = false;			
+			}
+			printf("handle image signal is %s\n",msg);
+			
+			strcpy(msg,"receive OK");
+			mClient.Send(msg, 256);
+			memset(&msg,'\0',256);
+			sleep(1);
+		}	
+	}
+	
+}
 
 void* socket_1_process(void*)
 {
@@ -133,7 +171,7 @@ int main(int argc, char *argv[])
 	int ret = 0;	
 	void *socket_1_process_result;
 	void *socket_2_process_result;
-
+	void *handle_image_event_process_result;
 	/*initialize the semphore*/
 	sem_init(&QueueLen,0,0);
 	sem_init(&photo_sem,0,0);
@@ -153,13 +191,25 @@ int main(int argc, char *argv[])
 		perror("socket_2 Thread create failure");
 		exit(-1);
 	}
-	ret = pthread_join( socket_1_id,&socket_1_process_result);
+	ret = pthread_create( &handle_image_event_id,NULL,handle_image_event_process,NULL );
+	if(ret != 0)
+	{
+		perror("socket_2 Thread create failure");
+		exit(-1);
+	}
+	ret = pthread_join( socket_1_id, &socket_1_process_result);
 	if(ret != 0)
 	{
 		perror("socket_1 Thread join failure");
 		exit(-1);
 	}
-	ret = pthread_join( socket_2_id,&socket_2_process_result);
+	ret = pthread_join( socket_2_id, &socket_2_process_result);
+	if(ret != 0)
+	{
+		perror("socket_1 Thread join failure");
+		exit(-1);
+	}
+	ret = pthread_join( handle_image_event_id, &handle_image_event_process_result);
 	if(ret != 0)
 	{
 		perror("socket_1 Thread join failure");

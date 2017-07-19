@@ -10,8 +10,9 @@
 
 #define BUFFER_SIZE 1024
 #define WELCOME_MESSAGE "Welcome to server!"
-#define SERVER_1_PORT 9998
-#define SERVER_2_PORT 9997
+#define SERVER_1_PORT 9997
+#define SERVER_2_PORT 9998
+#define SERVER_3_PORT 9999
 #define CLIENT_1_PORT 20001
 #define CLIENT_2_PORT 20002
 
