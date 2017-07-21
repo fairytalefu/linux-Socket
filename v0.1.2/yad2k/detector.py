@@ -29,7 +29,6 @@ class YOLO(object):
 		self.num_anchors = len(self.anchors)
 		self.yolo_model = self._get_model()
 		self.colors = self._get_colors()
-
 	def _get_class(self):
 		with open(self.classes_path) as f:
 			class_names = f.readlines() 
@@ -45,19 +44,19 @@ class YOLO(object):
 		yolo_model = load_model(self.model_path)
 		# TODO: Assumes dim ordering is channel last
 		model_output_channels = yolo_model.layers[-1].output_shape[-1]
-		assert model_output_channels == self.num_anchors * (num_classes + 5), \
+		assert model_output_channels == self.num_anchors * (self.num_classes + 5), \
 		'Mismatch between model and given anchor and class sizes. ' \
 		'Specify matching anchors and classes with --anchors_path and ' \
 		'--classes_path flags.'
-		print('{} model, anchors, and classes loaded.'.format(model_path))
+		print('{} model, anchors, and classes loaded.'.format(self.model_path))
 		return yolo_model
-	def _get_colors():
+	def _get_colors(self):
 		 # Generate colors for drawing bounding boxes.
 		hsv_tuples = [(x / len(self.class_names), 1., 1.) for x in range(len(self.class_names))]
 		colors = list(map(lambda x: colorsys.hsv_to_rgb(*x), hsv_tuples))
 		colors = list(map(lambda x: (int(x[0] * 255), int(x[1] * 255), int(x[2] * 255)),colors))
 		return colors
-	def detect_image():
+	def detect_image(self):
 		sess = K.get_session()
 		# Check if model is fully convolutional, assuming channel last order.
 		model_image_size = self.yolo_model.layers[0].input_shape[1:3]
@@ -70,9 +69,9 @@ class YOLO(object):
 		yolo_outputs = yolo_head(self.yolo_model.output, self.anchors, len(self.class_names))
 		input_image_shape = K.placeholder(shape=(2, ))
 		boxes, scores, classes = yolo_eval(yolo_outputs,input_image_shape,score_threshold=self.score_threshold,iou_threshold=self.iou_threshold)
-		for image_file in os.listdir(test_path):
+		for image_file in os.listdir(self.test_path):
 			try:
-				image_type = imghdr.what(os.path.join(test_path, image_file))
+				image_type = imghdr.what(os.path.join(self.test_path, image_file))
 				if not image_type:
 					continue
 			except IsADirectoryError:
@@ -128,7 +127,7 @@ class YOLO(object):
 
 def detector():
 	yolo = YOLO()
-#	yolo.detect_image()
+	yolo.detect_image()
 
 if __name__ == '__main__':
     detector()
