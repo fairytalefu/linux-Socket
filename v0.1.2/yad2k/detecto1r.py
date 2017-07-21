@@ -45,7 +45,7 @@ class YOLO(object):
 		yolo_model = load_model(self.model_path)
 		# TODO: Assumes dim ordering is channel last
 		model_output_channels = yolo_model.layers[-1].output_shape[-1]
-		assert model_output_channels == self.num_anchors * (num_classes + 5), \
+		assert model_output_channels == num_anchors * (num_classes + 5), \
 		'Mismatch between model and given anchor and class sizes. ' \
 		'Specify matching anchors and classes with --anchors_path and ' \
 		'--classes_path flags.'
@@ -77,53 +77,71 @@ class YOLO(object):
 					continue
 			except IsADirectoryError:
 				continue
-			image = Image.open(os.path.join(self.test_path, image_file))
-			if is_fixed_size:  # TODO: When resizing we can use minibatch input.
-				resized_image = image.resize(tuple(reversed(model_image_size)), Image.BICUBIC)
-				image_data = np.array(resized_image, dtype='float32')
-			else:
-				# Due to skip connection + max pooling in YOLO_v2, inputs must have
-				# width and height as multiples of 32.
-				new_image_size = (image.width - (image.width % 32),image.height - (image.height % 32))
-				resized_image = image.resize(new_image_size, Image.BICUBIC)
-				image_data = np.array(resized_image, dtype='float32')
-				print(image_data.shape)
+		image = Image.open(os.path.join(self.test_path, image_file))
+		if is_fixed_size:  # TODO: When resizing we can use minibatch input.
+		    resized_image = image.resize(
+			tuple(reversed(model_image_size)), Image.BICUBIC)
+		    image_data = np.array(resized_image, dtype='float32')
+		else:
+		    # Due to skip connection + max pooling in YOLO_v2, inputs must have
+		    # width and height as multiples of 32.
+		    new_image_size = (image.width - (image.width % 32),
+				      image.height - (image.height % 32))
+		    resized_image = image.resize(new_image_size, Image.BICUBIC)
+		    image_data = np.array(resized_image, dtype='float32')
+		    print(image_data.shape)
 
-			image_data /= 255.
-			image_data = np.expand_dims(image_data, 0)  # Add batch dimension.
+		image_data /= 255.
+		image_data = np.expand_dims(image_data, 0)  # Add batch dimension.
 
-			out_boxes, out_scores, out_classes = sess.run([boxes, scores, classes],feed_dict={self.yolo_model.input: image_data,input_image_shape: [image.size[1], image.size[0]],K.learning_phase(): 0})
-			print('Found {} boxes for {}'.format(len(out_boxes), image_file))
-			font = ImageFont.truetype(font='font/FiraMono-Medium.otf',size=np.floor(3e-2 * image.size[1] + 0.5).astype('int32'))
-			thickness = (image.size[0] + image.size[1]) // 300
-			for i, c in reversed(list(enumerate(out_classes))):
-				predicted_class = self.class_names[c]
-				box = out_boxes[i]
-				score = out_scores[i]
+		out_boxes, out_scores, out_classes = sess.run(
+		    [boxes, scores, classes],
+		    feed_dict={
+			self.yolo_model.input: image_data,
+			input_image_shape: [image.size[1], image.size[0]],
+			K.learning_phase(): 0
+		    })
+		print('Found {} boxes for {}'.format(len(out_boxes), image_file))
 
-				label = '{} {:.2f}'.format(predicted_class, score)
+		font = ImageFont.truetype(
+		    font='font/FiraMono-Medium.otf',
+		    size=np.floor(3e-2 * image.size[1] + 0.5).astype('int32'))
+		thickness = (image.size[0] + image.size[1]) // 300
 
-				draw = ImageDraw.Draw(image)
-				label_size = draw.textsize(label, font)
+		for i, c in reversed(list(enumerate(out_classes))):
+		    predicted_class = self.class_names[c]
+		    box = out_boxes[i]
+		    score = out_scores[i]
 
-				top, left, bottom, right = box
-				top = max(0, np.floor(top + 0.5).astype('int32'))
-				left = max(0, np.floor(left + 0.5).astype('int32'))
-				bottom = min(image.size[1], np.floor(bottom + 0.5).astype('int32'))
-				right = min(image.size[0], np.floor(right + 0.5).astype('int32'))
-				print(label, (left, top), (right, bottom))
-				if top - label_size[1] >= 0:
-					text_origin = np.array([left, top - label_size[1]])
-				else:
-					text_origin = np.array([left, top + 1])
+		    label = '{} {:.2f}'.format(predicted_class, score)
 
-				# My kingdom for a good redistributable image drawing library.
-				for i in range(thickness):
-					draw.rectangle([left + i, top + i, right - i, bottom - i],outline=self.colors[c])
-				draw.rectangle([tuple(text_origin), tuple(text_origin + label_size)],fill=self.colors[c])
-				draw.text(text_origin, label, fill=(0, 0, 0), font=font)
-				del draw
-			image.save(os.path.join(self.output_path, image_file), quality=90)
+		    draw = ImageDraw.Draw(image)
+		    label_size = draw.textsize(label, font)
+
+		    top, left, bottom, right = box
+		    top = max(0, np.floor(top + 0.5).astype('int32'))
+		    left = max(0, np.floor(left + 0.5).astype('int32'))
+		    bottom = min(image.size[1], np.floor(bottom + 0.5).astype('int32'))
+		    right = min(image.size[0], np.floor(right + 0.5).astype('int32'))
+		    print(label, (left, top), (right, bottom))
+
+		    if top - label_size[1] >= 0:
+			text_origin = np.array([left, top - label_size[1]])
+		    else:
+			text_origin = np.array([left, top + 1])
+
+		    # My kingdom for a good redistributable image drawing library.
+		    for i in range(thickness):
+			draw.rectangle(
+			    [left + i, top + i, right - i, bottom - i],
+			    outline=self.colors[c])
+		    draw.rectangle(
+			[tuple(text_origin), tuple(text_origin + label_size)],
+			fill=self.colors[c])
+		    draw.text(text_origin, label, fill=(0, 0, 0), font=font)
+		    del draw
+
+		image.save(os.path.join(self.output_path, image_file), quality=90)
 		sess.close()
 
 def detector():
@@ -131,4 +149,4 @@ def detector():
 #	yolo.detect_image()
 
 if __name__ == '__main__':
-    detector()
+    _detector()
