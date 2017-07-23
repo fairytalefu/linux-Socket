@@ -16,6 +16,7 @@ pthread_t socket_1_id;
 pthread_t socket_2_id;
 pthread_t handle_image_event_id;
 
+//send Text message
 void* handle_image_event_process(void *)
 {
 	char msg[256];
@@ -47,82 +48,78 @@ void* handle_image_event_process(void *)
 			strcpy(msg,"receive OK");
 			mClient.Send(msg, 256);
 			memset(&msg,'\0',256);
-			sleep(1);
-		}	
+			
+		}
+		sleep(1);	
 	}
 	
 }
-
+//send  processed picture
 void* socket_1_process(void*)
 {
 	ServerSock mServer_1;
 	ClientSock mClient_1;
 	char message[BUFFER_SIZE];
 	mServer_1.Create(false);
-	
+	char buf_1[64];
 	mServer_1.Bind(SERVER_1_PORT);
 	FILE * fp;
-	fp = fopen("/home/fly/file.jpg","wb+");
-	fseek(fp, 0, SEEK_SET);
+	
 	// 等待客户端连接
   	printf("socket_1_process is waiting for a connection\n");
-	
+	int length  = 0,sum=0,size = 0;
+	int flag = 1;
 	while(mServer_1.Listen())
 	{	
 		mServer_1.Accept(mClient_1);
 		printf("Accepted CLinet1.\n");
-		pthread_mutex_lock(&sig_mutex);
-		mClient_1.Recv(message, 256);
-		pthread_mutex_unlock(&sig_mutex);
-		printf("file info is %s\n",message);
-		int length  = atoi(message),size = 0;
-		int size_buf = length % BUFFER_SIZE;
-		int i = 0, j = length / BUFFER_SIZE;
-		int flag = 1;
+		sum=0;
+		size = 0;
+		flag = 1;
+		bzero(message,sizeof(message));
+		fp = fopen("/home/fly/file.jpg","wb+");
+		fseek(fp, 0, SEEK_SET);
 		while(mClient_1.m_bConnected && flag)
 		{			
 			
-			while(size < length)
+			mClient_1.Recv(buf_1, 64);
+			printf("file info is %s\n",buf_1);
+			length  = atoi(buf_1);
+			while(size = recv(mClient_1.m_nSockfd, message, sizeof(message), 0))
 			{
-				if(i < j)
+				if(size < 0)
 				{
-					
-					mClient_1.RecvPicture(message, BUFFER_SIZE);
-					
-					fwrite(&message, BUFFER_SIZE, 1, fp);
-					size += BUFFER_SIZE;	
-					fseek(fp, 0, size);
-					i++;
-					
+					break;					
 				}
-				else
+				if(sum  < length)
 				{
-					
-				
-					mClient_1.RecvPicture(message, size_buf);
-					fwrite(&message, size_buf, 1, fp);
-				
-					size += size_buf;	
-					fseek(fp, 0, size);
+					fwrite(&message,sizeof(char), size,fp);
+					sum += size;
+					printf("sum size = %d\n",sum);
 				}
+				if(sum == length)
+					break;
 			}
-			fclose(fp);
+			printf("sum------------------------ size = %d\n",sum);
 			flag = 0;
+			fclose(fp);
 			printf("save picture ok\n");
-			mClient_1.m_bConnected = false;
-			mClient_1.Close();
 			//printf("%s\n",message);
-			sleep(1);
+			mClient_1.m_bConnected =false;
+			mClient_1.Close();
 		}
+		sleep(1);
 	}
+	
 
 }
+//receive picture from clent1(VideoCapture)
 void* socket_2_process(void*)
 {
     	ServerSock mServer_2;
 	ClientSock mClient_2;
 	mServer_2.Create(false);
-
+	char len_buf[10];
 	mServer_2.Bind(SERVER_2_PORT);
 	// 等待客户端连接
 	char buffer[BUFFER_SIZE];
@@ -138,17 +135,19 @@ void* socket_2_process(void*)
 	flen = ftell(fp);
 	
 	fseek(fp, 0, SEEK_SET);
-	sprintf(buffer,"%d",flen);
+	sprintf(len_buf,"%d",flen);
 	
 	/*******************************************/
 	int flag = 1;
   	printf("socket_2_process is waiting for a connection\n");
 	while(mServer_2.Listen())
 	{	
+		fp = fopen("/home/fly/logo.jpg","rb");
+		fseek(fp, 0, SEEK_SET);
 		mServer_2.Accept(mClient_2);
 		printf("Accepted Client2\n");
-		mClient_2.Send(buffer, 256);
-		printf("size is %s\n",buffer);
+		mClient_2.Send(len_buf, 256);
+		printf("size is %s\n",len_buf);
 		while(mClient_2.m_bConnected && flag)
 		{
 			
@@ -160,13 +159,16 @@ void* socket_2_process(void*)
 				fseek(fp, 0, size);
 			}
 			flag = 0;
-			fclose(fp);
 			printf("send the file OK!\n");
-			sleep(1);
+			
 		}
-		
+		fclose(fp);
+		sleep(1);
 	}
 }
+//process the picture thread
+
+
 
 int main(int argc, char *argv[])
 {
@@ -199,7 +201,6 @@ int main(int argc, char *argv[])
 		perror("socket_2 Thread create failure");
 		exit(-1);
 	}
-
 	ret = pthread_join( socket_1_id, &socket_1_process_result);
 	if(ret != 0)
 	{
@@ -215,7 +216,7 @@ int main(int argc, char *argv[])
 	ret = pthread_join( handle_image_event_id, &handle_image_event_process_result);
 	if(ret != 0)
 	{
-		perror("socket_1 Thread join failure");
+		perror("handle_image_event Thread join failure");
 		exit(-1);
 	}
     return 0;
